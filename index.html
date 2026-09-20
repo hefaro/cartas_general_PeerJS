@@ -7,13 +7,13 @@
     
     <!-- Estilos CSS de Tailwind -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Cinzel:wght@700&display=swap" rel="stylesheet">
     
-    <!-- Librería para el Certificado en PDF -->
+    <!-- Librería externa para el Certificado en PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     
-    <!-- Librería para Generación de Código QR -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Librería PeerJS para conexión entre jugadores -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; perspective: 1000px; min-height: 100vh; }
@@ -26,11 +26,16 @@
             backface-visibility: hidden; display: flex; flex-direction: column; 
             justify-content: center; align-items: center; border-radius: 1rem; 
             box-shadow: 0 4px 10px rgba(0,0,0,0.1); padding: 0.75rem; 
+            transition: background-color 0.3s ease;
         }
-        .card-front { background-color: #4f46e5; color: white; font-weight: 700; font-size: 1.25rem; }
+        .card-front { background-color: #4f46e5; color: white; font-weight: 700; font-size: 1.25rem; text-align: center; }
         .card-back { background-color: white; transform: rotateY(180deg); border: 2px solid #4f46e5; }
-        .card.correct .card-front { background-color: #22c55e; }
-        .card.incorrect .card-front { background-color: #ef4444; }
+        
+        /* Estados visuales de la tarjeta */
+        .card.correct .card-front { background-color: #22c55e !important; } /* Verde cuando acierta */
+        .card.failed-own .card-front { background-color: #ef4444 !important; color: white !important; } /* Rojo si el propio jugador falla */
+        .card.taken-by-rival .card-front { background-color: #ef4444 !important; color: white !important; } /* Rojo si la gana el rival */
+        
         .disabled-card { pointer-events: none; }
         
         .answers-grid {
@@ -48,7 +53,7 @@
         .answer-button.correct-opt { background-color: #22c55e !important; color: white !important; border-color: #22c55e !important; }
         .answer-button.incorrect-opt { background-color: #ef4444 !important; color: white !important; border-color: #ef4444 !important; }
 
-        /* Estilos para el Diploma / Certificado */
+        /* Estilos para el Certificado */
         .certificado {
             font-family: 'Cinzel', serif;
             background: #ffffff;
@@ -61,18 +66,60 @@
 <body class="p-4 flex flex-col items-center">
 
     <!-- Pantalla Inicial -->
-    <div id="start-screen" class="w-full max-w-md p-8 bg-white rounded-2xl shadow-xl mt-10">
+    <div id="start-screen" class="w-full max-w-md p-8 bg-white rounded-2xl shadow-xl mt-6">
         <h1 class="text-3xl font-bold text-indigo-600 text-center mb-6">Operaciones con Enteros</h1>
-        <div class="space-y-4 mb-6">
-            <label class="block text-sm font-semibold text-gray-700">Nombre del Jugador:</label>
-            <input type="text" id="player-name-input" placeholder="Escribe tu nombre completo..." class="w-full p-3 border-2 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
-        </div>
-        <button id="start-game-button" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl disabled:opacity-50 transition hover:bg-indigo-700" disabled>¡Iniciar Desafío!</button>
         
-        <!-- Enlaces auxiliares -->
-        <div class="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-indigo-600 font-semibold">
-            <a href="instrucciones.html" class="hover:underline flex items-center gap-1">📖 Instrucciones</a>
-            <button id="open-qr-btn" class="hover:underline flex items-center gap-1 focus:outline-none">📲 Compartir QR</button>
+        <div class="space-y-4 mb-6">
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Nombre del Jugador:</label>
+                <input type="text" id="player-name-input" placeholder="Escribe tu nombre completo..." class="w-full p-3 border-2 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+
+            <!-- Selector de Banco de Preguntas -->
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Seleccionar Banco de Preguntas:</label>
+                <select id="bank-select" class="w-full p-3 border-2 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-semibold text-gray-700">
+                    <option value="1">Banco 1</option>
+                    <option value="2">Banco 2</option>
+                    <option value="3">Banco 3</option>
+                    <option value="4">Banco 4</option>
+                    <option value="5">Banco 5</option>
+                </select>
+            </div>
+
+            <!-- Opciones Multijugador -->
+            <div class="border-t border-gray-200 pt-4 mt-2">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Modo de Juego:</label>
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                    <button id="mode-solo-btn" class="py-2 px-3 text-xs font-bold rounded-lg border-2 border-indigo-600 bg-indigo-50 text-indigo-700">1 Jugador</button>
+                    <button id="mode-multi-btn" class="py-2 px-3 text-xs font-bold rounded-lg border-2 border-gray-200 bg-white text-gray-600">2 Jugadores (P2P)</button>
+                </div>
+
+                <div id="multiplayer-options" class="hidden space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div class="flex items-center space-x-2">
+                        <button id="host-btn" class="w-1/2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold py-2 text-xs rounded-lg transition">Crear Sala</button>
+                        <button id="join-btn" class="w-1/2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 text-xs rounded-lg transition">Unirse a Sala</button>
+                    </div>
+
+                    <div id="room-code-display" class="hidden text-center p-2 bg-white rounded-lg border border-indigo-200">
+                        <span class="text-xs text-gray-500">Código de Sala (3 dígitos):</span>
+                        <div id="room-code-val" class="font-mono text-2xl font-black text-indigo-600 tracking-widest">---</div>
+                        <span class="text-xs text-gray-400">Comparte este código con tu compañero</span>
+                    </div>
+
+                    <div id="room-input-container" class="hidden space-y-2">
+                        <input type="text" id="join-code-input" maxlength="3" placeholder="Ej: 458" class="w-full p-2 text-base border-2 border-indigo-200 rounded-lg text-center uppercase font-mono font-bold tracking-widest">
+                        <button id="connect-peer-btn" class="w-full bg-indigo-600 text-white font-bold py-2 text-xs rounded-lg">Conectar con Rival</button>
+                    </div>
+
+                    <div id="connection-status" class="text-xs text-center font-semibold text-gray-500"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-3">
+            <button id="start-game-button" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl disabled:opacity-50 transition" disabled>¡Iniciar Desafío!</button>
+            <a href="instrucciones.html" class="w-full block text-center bg-slate-100 hover:bg-slate-200 text-indigo-600 font-semibold py-3 rounded-xl border border-slate-200 transition text-sm">📖 Ver Instrucciones de Juego</a>
         </div>
     </div>
 
@@ -80,7 +127,10 @@
     <div id="game-container" class="w-full max-w-5xl hidden">
         <div class="flex justify-between items-center mb-6 px-6 py-4 bg-white rounded-2xl shadow-sm">
             <div><span class="text-xs font-bold text-slate-400">TIEMPO</span><br><span id="timer" class="text-2xl font-black">120s</span></div>
-            <div id="player-display" class="text-lg font-bold text-indigo-600"></div>
+            <div class="text-center">
+                <div id="player-display" class="text-lg font-bold text-indigo-600"></div>
+                <div id="rival-display" class="text-xs font-semibold text-slate-400 hidden">Rival: Esperando...</div>
+            </div>
             <div class="text-right"><span class="text-xs font-bold text-slate-400">ACIERTOS</span><br><span id="hits-display" class="text-2xl font-black text-indigo-600">0/16</span></div>
         </div>
 
@@ -116,42 +166,193 @@
         </div>
     </div>
 
-    <!-- Modal Flotante de Código QR -->
-    <div id="qr-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl relative">
-            <h3 class="text-lg font-bold text-gray-800 mb-2">Escanea para Compartir</h3>
-            <p class="text-xs text-gray-500 mb-4">Apunta con la cámara de tu teléfono para acceder directamente al juego.</p>
-            
-            <div class="flex justify-center my-4">
-                <div id="modal-qrcode" class="p-2 bg-white border border-gray-200 rounded-lg shadow-inner"></div>
-            </div>
-            
-            <button id="close-qr-btn" class="mt-4 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 rounded-xl text-sm transition">Cerrar</button>
-        </div>
-    </div>
-
     <!-- Archivo del Banco de Preguntas -->
     <script src="preguntas.js"></script>
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         const TIEMPO_MAX = 120, TOTAL_JUEGO = 16;
-        let nombreJugador = '', aciertos = 0, tiempo = TIEMPO_MAX, activo = false, timer, respondidas = 0, cartaVisible = null;
+        let nombreJugador = '', aciertos = 0, tiempo = TIEMPO_MAX, activo = false, timer, cartasResueltasTotales = 0, cartaVisible = null;
+
+        // Variables de red P2P
+        let peer = null, conn = null, esMultijugador = false, esHost = false, rivalNombre = '', rivalAciertos = 0;
+        let indicesElegidos = [];
+        let tarjetasDOM = [];
+        let bancoPreguntasActual = [];
+
+        const PREFIX = "ENT-3D-"; // Prefijo interno para evitar colisiones globales
 
         const nameInput = document.getElementById('player-name-input');
+        const bankSelect = document.getElementById('bank-select');
         const startBtn = document.getElementById('start-game-button');
         const grid = document.getElementById('card-grid');
 
-        // Activación del botón de inicio
+        const modeSoloBtn = document.getElementById('mode-solo-btn');
+        const modeMultiBtn = document.getElementById('mode-multi-btn');
+        const multiOptions = document.getElementById('multiplayer-options');
+        const hostBtn = document.getElementById('host-btn');
+        const joinBtn = document.getElementById('join-btn');
+        const roomCodeDisplay = document.getElementById('room-code-display');
+        const roomInputContainer = document.getElementById('room-input-container');
+        const connStatus = document.getElementById('connection-status');
+
         nameInput.oninput = (e) => {
             nombreJugador = e.target.value.trim();
-            startBtn.disabled = nombreJugador.length < 2;
+            validarEstadoBoton();
         };
 
-        // Lógica de finalización e inserción de datos en el diploma
+        function obtenerBancoSeleccionado(num) {
+            // Intenta obtener banco1..banco5, o recae en cardData si es único
+            if (window[`banco${num}`]) {
+                return window[`banco${num}`];
+            } else if (typeof cardData !== 'undefined') {
+                return cardData;
+            }
+            return [];
+        }
+
+        function validarEstadoBoton() {
+            if (!esMultijugador) {
+                startBtn.disabled = nombreJugador.length < 2;
+            } else {
+                startBtn.disabled = nombreJugador.length < 2 || !conn || !conn.open;
+            }
+        }
+
+        modeSoloBtn.onclick = () => {
+            esMultijugador = false;
+            modeSoloBtn.className = "py-2 px-3 text-xs font-bold rounded-lg border-2 border-indigo-600 bg-indigo-50 text-indigo-700";
+            modeMultiBtn.className = "py-2 px-3 text-xs font-bold rounded-lg border-2 border-gray-200 bg-white text-gray-600";
+            multiOptions.classList.add('hidden');
+            bankSelect.disabled = false;
+            validarEstadoBoton();
+        };
+
+        modeMultiBtn.onclick = () => {
+            esMultijugador = true;
+            modeMultiBtn.className = "py-2 px-3 text-xs font-bold rounded-lg border-2 border-indigo-600 bg-indigo-50 text-indigo-700";
+            modeSoloBtn.className = "py-2 px-3 text-xs font-bold rounded-lg border-2 border-gray-200 bg-white text-gray-600";
+            multiOptions.classList.remove('hidden');
+            validarEstadoBoton();
+        };
+
+        hostBtn.onclick = () => {
+            if (nombreJugador.length < 2) {
+                alert("Por favor escribe tu nombre antes de crear la sala.");
+                return;
+            }
+            esHost = true;
+            bankSelect.disabled = false; // El Host puede elegir el banco
+            roomInputContainer.classList.add('hidden');
+            connStatus.textContent = "Generando código de 3 dígitos...";
+            
+            const num3Digitos = Math.floor(100 + Math.random() * 900).toString();
+            const peerID = PREFIX + num3Digitos;
+            
+            peer = new Peer(peerID);
+
+            peer.on('open', () => {
+                document.getElementById('room-code-val').textContent = num3Digitos;
+                roomCodeDisplay.classList.remove('hidden');
+                connStatus.textContent = "Esperando la conexión del rival...";
+            });
+
+            peer.on('connection', (c) => {
+                conn = c;
+                escucharEventosRed();
+            });
+
+            peer.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    hostBtn.click();
+                } else {
+                    connStatus.textContent = "Error al crear la sala: " + err.type;
+                }
+            });
+        };
+
+        joinBtn.onclick = () => {
+            if (nombreJugador.length < 2) {
+                alert("Por favor escribe tu nombre antes de unirte a una sala.");
+                return;
+            }
+            esHost = false;
+            bankSelect.disabled = true; // El cliente usará el banco del host
+            roomCodeDisplay.classList.add('hidden');
+            roomInputContainer.classList.remove('hidden');
+        };
+
+        document.getElementById('connect-peer-btn').onclick = () => {
+            const numIngresado = document.getElementById('join-code-input').value.trim();
+            if (numIngresado.length !== 3 || isNaN(numIngresado)) {
+                alert("Por favor ingresa un código válido de 3 dígitos numéricos.");
+                return;
+            }
+
+            const targetPeerID = PREFIX + numIngresado;
+            connStatus.textContent = "Conectando con la sala " + numIngresado + "...";
+            peer = new Peer();
+
+            peer.on('open', () => {
+                conn = peer.connect(targetPeerID);
+                escucharEventosRed();
+            });
+
+            peer.on('error', (err) => {
+                connStatus.textContent = "Error al conectar: No se encontró la sala.";
+            });
+        };
+
+        function escucharEventosRed() {
+            conn.on('open', () => {
+                connStatus.textContent = "¡Rival conectado exitosamente!";
+                connStatus.className = "text-xs text-center font-semibold text-green-600";
+                conn.send({ type: 'HANDSHAKE', nombre: nombreJugador });
+                validarEstadoBoton();
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'HANDSHAKE') {
+                    rivalNombre = data.nombre;
+                    document.getElementById('rival-display').textContent = `Rival: ${rivalNombre} (0)`;
+                    document.getElementById('rival-display').classList.remove('hidden');
+                } else if (data.type === 'START_GAME') {
+                    indicesElegidos = data.indices;
+                    rivalNombre = data.nombre;
+                    bankSelect.value = data.bancoNum; // Sincroniza el selector con la opción del host
+                    ejecutarInicioJuego();
+                } else if (data.type === 'TIMER_SYNC') {
+                    tiempo = data.tiempo;
+                    document.getElementById('timer').textContent = `${tiempo}s`;
+                    if (tiempo <= 0) finalizar();
+                } else if (data.type === 'CARD_CLAIMED_BY_RIVAL') {
+                    marcarCartaGanadaPorRival(data.cardIndex);
+                }
+            });
+        }
+
+        function marcarCartaGanadaPorRival(cardIndex) {
+            const targetContainer = tarjetasDOM[cardIndex];
+            if (!targetContainer) return;
+
+            const card = targetContainer.querySelector('.card');
+            
+            rivalAciertos++;
+            document.getElementById('rival-display').textContent = `Rival: ${rivalNombre} (${rivalAciertos})`;
+
+            if (!card.classList.contains('correct')) {
+                card.classList.add('disabled-card', 'taken-by-rival');
+                card.classList.remove('flipped', 'failed-own');
+                card.querySelector('.card-front').innerHTML = `✗ (${rivalNombre})`;
+            }
+
+            cartasResueltasTotales++;
+            if (cartasResueltasTotales >= TOTAL_JUEGO) finalizar();
+        }
+
         function finalizar() {
             activo = false; 
-            clearInterval(timer);
+            if (timer) clearInterval(timer);
             
             const notaAciertos = (aciertos / TOTAL_JUEGO) * 4.5;
             const bonoTiempo = aciertos > 0 ? (tiempo / TIEMPO_MAX) * 0.5 : 0;
@@ -165,16 +366,21 @@
 
             document.getElementById('cert-nombre').textContent = nombreJugador;
             document.getElementById('cert-nota').textContent = nota;
-            document.getElementById('cert-detalles').textContent = `Puntaje: ${aciertos} de ${TOTAL_JUEGO} aciertos | Tiempo empleado: ${tiempoEmpleado} segundos`;
+            
+            let detalleTexto = `Banco: ${bankSelect.value} | Aciertos: ${aciertos} de ${TOTAL_JUEGO} | Tiempo: ${tiempoEmpleado}s`;
+            if (esMultijugador && rivalNombre) {
+                detalleTexto += ` | Rival (${rivalNombre}): ${rivalAciertos}/${TOTAL_JUEGO}`;
+            }
+            document.getElementById('cert-detalles').textContent = detalleTexto;
             document.getElementById('cert-fecha').textContent = `Fecha: ${new Date().toLocaleDateString('es-CO')}`;
 
             document.getElementById('certificate-area').classList.remove('hidden');
         }
 
-        // Creación dinámica de cartas en el DOM
-        function crearCarta(info) {
+        function crearCarta(info, cardIndex) {
             const div = document.createElement('div');
             div.className = 'card-container';
+            div.dataset.index = cardIndex;
             div.innerHTML = `
                 <div class="card">
                     <div class="card-inner">
@@ -193,29 +399,45 @@
             btns.forEach(btn => {
                 btn.onclick = (e) => {
                     e.stopPropagation();
-                    if (!activo || card.classList.contains('correct') || card.classList.contains('incorrect')) return;
+                    if (!activo || card.classList.contains('correct') || card.classList.contains('failed-own') || card.classList.contains('taken-by-rival')) return;
                     
                     const idx = parseInt(btn.dataset.idx);
-                    if (idx === info.correctIndex) {
+                    const esCorrecto = (idx === info.correctIndex);
+                    
+                    if (esCorrecto) {
                         card.classList.add('correct', 'disabled-card');
                         btn.classList.add('correct-opt');
                         aciertos++;
                         card.querySelector('.card-front').innerHTML = "✓";
+                        
+                        cartasResueltasTotales++;
+                        document.getElementById('hits-display').textContent = `${aciertos}/${TOTAL_JUEGO}`;
+
+                        if (conn && conn.open) {
+                            conn.send({ 
+                                type: 'CARD_CLAIMED_BY_RIVAL', 
+                                cardIndex: cardIndex
+                            });
+                        }
+
+                        setTimeout(() => { card.classList.remove('flipped'); cartaVisible = null; }, 800);
+                        if (cartasResueltasTotales >= TOTAL_JUEGO) finalizar();
+
                     } else {
-                        card.classList.add('incorrect', 'disabled-card');
+                        card.classList.add('failed-own', 'disabled-card');
                         btn.classList.add('incorrect-opt');
-                        btns[info.correctIndex].classList.add('correct-opt');
-                        card.querySelector('.card-front').innerHTML = "✗";
+                        card.querySelector('.card-front').innerHTML = "✗ " + info.question;
+
+                        setTimeout(() => { 
+                            card.classList.remove('flipped'); 
+                            cartaVisible = null; 
+                        }, 800);
                     }
-                    respondidas++;
-                    document.getElementById('hits-display').textContent = `${aciertos}/${TOTAL_JUEGO}`;
-                    setTimeout(() => { card.classList.remove('flipped'); cartaVisible = null; }, 800);
-                    if (respondidas >= TOTAL_JUEGO) finalizar();
                 };
             });
 
             card.onclick = () => {
-                if (!activo || card.classList.contains('correct') || card.classList.contains('incorrect')) return;
+                if (!activo || card.classList.contains('correct') || card.classList.contains('failed-own') || card.classList.contains('taken-by-rival')) return;
                 if (cartaVisible && cartaVisible !== card) cartaVisible.classList.remove('flipped');
                 card.classList.add('flipped');
                 cartaVisible = card;
@@ -223,30 +445,67 @@
             return div;
         }
 
-        // Inicio del Juego
-        startBtn.onclick = () => {
+        function ejecutarInicioJuego() {
+            bancoPreguntasActual = obtenerBancoSeleccionado(bankSelect.value);
+
             document.getElementById('start-screen').classList.add('hidden');
             document.getElementById('game-container').classList.remove('hidden');
             document.getElementById('player-display').textContent = nombreJugador;
             
+            if (esMultijugador && rivalNombre) {
+                document.getElementById('rival-display').textContent = `Rival: ${rivalNombre} (0)`;
+                document.getElementById('rival-display').classList.remove('hidden');
+            }
+
             grid.innerHTML = '';
+            tarjetasDOM = [];
             
-            // Selección aleatoria de 16 preguntas
-            const seleccionadas = [...cardData].sort(() => 0.5 - Math.random()).slice(0, TOTAL_JUEGO);
+            let seleccionadas = [];
+            if (esMultijugador) {
+                seleccionadas = indicesElegidos.map(i => bancoPreguntasActual[i]);
+            } else {
+                seleccionadas = [...bancoPreguntasActual].sort(() => 0.5 - Math.random()).slice(0, TOTAL_JUEGO);
+            }
             
-            seleccionadas.forEach(q => {
-                grid.appendChild(crearCarta(q));
+            seleccionadas.forEach((q, idx) => {
+                const el = crearCarta(q, idx);
+                tarjetasDOM.push(el);
+                grid.appendChild(el);
             });
             
             activo = true;
-            timer = setInterval(() => { 
-                tiempo--; 
-                document.getElementById('timer').textContent = `${tiempo}s`; 
-                if (tiempo <= 0) finalizar(); 
-            }, 1000);
+
+            if (!esMultijugador || esHost) {
+                timer = setInterval(() => { 
+                    tiempo--; 
+                    document.getElementById('timer').textContent = `${tiempo}s`; 
+                    
+                    if (esMultijugador && conn && conn.open) {
+                        conn.send({ type: 'TIMER_SYNC', tiempo: tiempo });
+                    }
+
+                    if (tiempo <= 0) finalizar(); 
+                }, 1000);
+            }
+        }
+
+        startBtn.onclick = () => {
+            if (esMultijugador && esHost) {
+                bancoPreguntasActual = obtenerBancoSeleccionado(bankSelect.value);
+                const todosLosIndices = Array.from({length: bancoPreguntasActual.length}, (_, i) => i);
+                indicesElegidos = todosLosIndices.sort(() => 0.5 - Math.random()).slice(0, TOTAL_JUEGO);
+                
+                conn.send({
+                    type: 'START_GAME',
+                    indices: indicesElegidos,
+                    nombre: nombreJugador,
+                    bancoNum: bankSelect.value
+                });
+            }
+            ejecutarInicioJuego();
         };
 
-        // Descarga en formato PDF
+        // Exportación PDF del Certificado
         document.getElementById('download-cert-btn').onclick = () => {
             const element = document.getElementById('certificado-node');
             const opt = {
@@ -260,30 +519,6 @@
         };
 
         document.getElementById('restart-button').onclick = () => location.reload();
-
-        // Control del Modal de Código QR
-        const qrModal = document.getElementById('qr-modal');
-        const openQrBtn = document.getElementById('open-qr-btn');
-        const closeQrBtn = document.getElementById('close-qr-btn');
-        let qrGenerado = false;
-
-        openQrBtn.onclick = () => {
-            qrModal.classList.remove('hidden');
-            if (!qrGenerado) {
-                new QRCode(document.getElementById("modal-qrcode"), {
-                    text: window.location.href,
-                    width: 150,
-                    height: 150,
-                    colorDark : "#4f46e5",
-                    colorLight : "#ffffff",
-                    correctLevel : QRCode.CorrectLevel.H
-                });
-                qrGenerado = true;
-            }
-        };
-
-        closeQrBtn.onclick = () => qrModal.classList.add('hidden');
-        qrModal.onclick = (e) => { if (e.target === qrModal) qrModal.classList.add('hidden'); };
     });
     </script>
 </body>
