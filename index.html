@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Desafío de Enteros - Flashcards</title>
+    <title>Desafío de Preguntas - Flashcards</title>
     
     <!-- Estilos CSS de Tailwind -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -28,13 +28,13 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.1); padding: 0.75rem; 
             transition: background-color 0.3s ease;
         }
-        .card-front { background-color: #4f46e5; color: white; font-weight: 700; font-size: 1.25rem; text-align: center; }
+        .card-front { background-color: #4f46e5; color: white; font-weight: 700; font-size: 1.1rem; text-align: center; }
         .card-back { background-color: white; transform: rotateY(180deg); border: 2px solid #4f46e5; }
         
         /* Estados visuales de la tarjeta */
-        .card.correct .card-front { background-color: #22c55e !important; } /* Verde cuando acierta */
-        .card.failed-own .card-front { background-color: #ef4444 !important; color: white !important; } /* Rojo si el propio jugador falla */
-        .card.taken-by-rival .card-front { background-color: #ef4444 !important; color: white !important; } /* Rojo si la gana el rival */
+        .card.correct .card-front { background-color: #22c55e !important; }
+        .card.failed-own .card-front { background-color: #ef4444 !important; color: white !important; }
+        .card.taken-by-rival .card-front { background-color: #ef4444 !important; color: white !important; }
         
         .disabled-card { pointer-events: none; }
         
@@ -67,7 +67,7 @@
 
     <!-- Pantalla Inicial -->
     <div id="start-screen" class="w-full max-w-md p-8 bg-white rounded-2xl shadow-xl mt-6">
-        <h1 class="text-3xl font-bold text-indigo-600 text-center mb-6">Operaciones con Enteros</h1>
+        <h1 class="text-3xl font-bold text-indigo-600 text-center mb-6">Desafío Flashcards</h1>
         
         <div class="space-y-4 mb-6">
             <div>
@@ -75,15 +75,15 @@
                 <input type="text" id="player-name-input" placeholder="Escribe tu nombre completo..." class="w-full p-3 border-2 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
 
-            <!-- Selector de Banco de Preguntas -->
+            <!-- Seleccionar Banco de Preguntas -->
             <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">Seleccionar Banco de Preguntas:</label>
-                <select id="bank-select" class="w-full p-3 border-2 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-semibold text-gray-700">
-                    <option value="1">Banco 1</option>
-                    <option value="2">Banco 2</option>
-                    <option value="3">Banco 3</option>
-                    <option value="4">Banco 4</option>
-                    <option value="5">Banco 5</option>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Selecciona el Banco de Preguntas:</label>
+                <select id="bank-select" class="w-full p-3 border-2 border-gray-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-gray-700">
+                    <option value="preguntas1.js">Banco 1: Operaciones con Enteros</option>
+                    <option value="preguntas2.js">Banco 2: Tablas de Multiplicar</option>
+                    <option value="preguntas3.js">Banco 3: Geografía</option>
+                    <option value="preguntas4.js">Banco 4: Ciencias Naturales</option>
+                    <option value="preguntas5.js">Banco 5: Cultura General</option>
                 </select>
             </div>
 
@@ -141,10 +141,10 @@
         <div id="certificate-area" class="hidden mt-8 w-full max-w-2xl mx-auto">
             <div id="certificado-node" class="certificado p-10 text-center shadow-2xl bg-white relative">
                 <h3 class="text-xl font-semibold text-gray-600 tracking-widest uppercase mb-2">Certificado de Participación</h3>
-                <h2 class="text-3xl font-bold text-indigo-900 mb-6">Desafío de Matemáticas</h2>
+                <h2 class="text-3xl font-bold text-indigo-900 mb-6">Desafío de Conocimientos</h2>
                 <p class="text-gray-600 italic mb-2">Otorgado con orgullo a:</p>
                 <div id="cert-nombre" class="text-2xl font-bold text-slate-800 border-b-2 border-indigo-500 inline-block px-8 py-1 mb-6"></div>
-                <p class="text-gray-600 mb-4">Por haber completado la actividad de <strong>Operaciones con Enteros</strong> con la siguiente calificación:</p>
+                <p class="text-gray-600 mb-4">Por haber completado la actividad con la siguiente calificación:</p>
                 
                 <div class="my-4">
                     <span id="cert-nota" class="text-6xl font-black text-indigo-600">0.0</span>
@@ -166,9 +166,6 @@
         </div>
     </div>
 
-    <!-- Archivo del Banco de Preguntas -->
-    <script src="preguntas.js"></script>
-
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         const TIEMPO_MAX = 120, TOTAL_JUEGO = 16;
@@ -178,13 +175,13 @@
         let peer = null, conn = null, esMultijugador = false, esHost = false, rivalNombre = '', rivalAciertos = 0;
         let indicesElegidos = [];
         let tarjetasDOM = [];
-        let bancoPreguntasActual = [];
+        let activeCardData = [];
 
-        const PREFIX = "ENT-3D-"; // Prefijo interno para evitar colisiones globales
+        const PREFIX = "ENT-3D-";
 
         const nameInput = document.getElementById('player-name-input');
-        const bankSelect = document.getElementById('bank-select');
         const startBtn = document.getElementById('start-game-button');
+        const bankSelect = document.getElementById('bank-select');
         const grid = document.getElementById('card-grid');
 
         const modeSoloBtn = document.getElementById('mode-solo-btn');
@@ -201,22 +198,34 @@
             validarEstadoBoton();
         };
 
-        function obtenerBancoSeleccionado(num) {
-            // Intenta obtener banco1..banco5, o recae en cardData si es único
-            if (window[`banco${num}`]) {
-                return window[`banco${num}`];
-            } else if (typeof cardData !== 'undefined') {
-                return cardData;
-            }
-            return [];
-        }
-
         function validarEstadoBoton() {
             if (!esMultijugador) {
                 startBtn.disabled = nombreJugador.length < 2;
             } else {
                 startBtn.disabled = nombreJugador.length < 2 || !conn || !conn.open;
             }
+        }
+
+        // Carga dinámica del archivo .js seleccionado
+        function cargarBancoPreguntas(filename) {
+            return new Promise((resolve, reject) => {
+                const oldScript = document.getElementById('dynamic-questions-script');
+                if (oldScript) oldScript.remove();
+
+                const script = document.createElement('script');
+                script.id = 'dynamic-questions-script';
+                script.src = filename;
+                script.onload = () => {
+                    if (typeof cardData !== 'undefined') {
+                        activeCardData = cardData;
+                        resolve(cardData);
+                    } else {
+                        reject(new Error("No se encontraron datos en el banco."));
+                    }
+                };
+                script.onerror = () => reject(new Error("Error al cargar el archivo: " + filename));
+                document.head.appendChild(script);
+            });
         }
 
         modeSoloBtn.onclick = () => {
@@ -242,7 +251,6 @@
                 return;
             }
             esHost = true;
-            bankSelect.disabled = false; // El Host puede elegir el banco
             roomInputContainer.classList.add('hidden');
             connStatus.textContent = "Generando código de 3 dígitos...";
             
@@ -277,7 +285,6 @@
                 return;
             }
             esHost = false;
-            bankSelect.disabled = true; // El cliente usará el banco del host
             roomCodeDisplay.classList.add('hidden');
             roomInputContainer.classList.remove('hidden');
         };
@@ -311,7 +318,7 @@
                 validarEstadoBoton();
             });
 
-            conn.on('data', (data) => {
+            conn.on('data', async (data) => {
                 if (data.type === 'HANDSHAKE') {
                     rivalNombre = data.nombre;
                     document.getElementById('rival-display').textContent = `Rival: ${rivalNombre} (0)`;
@@ -319,7 +326,8 @@
                 } else if (data.type === 'START_GAME') {
                     indicesElegidos = data.indices;
                     rivalNombre = data.nombre;
-                    bankSelect.value = data.bancoNum; // Sincroniza el selector con la opción del host
+                    await cargarBancoPreguntas(data.bankFile);
+                    bankSelect.value = data.bankFile;
                     ejecutarInicioJuego();
                 } else if (data.type === 'TIMER_SYNC') {
                     tiempo = data.tiempo;
@@ -367,7 +375,7 @@
             document.getElementById('cert-nombre').textContent = nombreJugador;
             document.getElementById('cert-nota').textContent = nota;
             
-            let detalleTexto = `Banco: ${bankSelect.value} | Aciertos: ${aciertos} de ${TOTAL_JUEGO} | Tiempo: ${tiempoEmpleado}s`;
+            let detalleTexto = `Aciertos: ${aciertos} de ${TOTAL_JUEGO} | Tiempo empleado: ${tiempoEmpleado} segundos`;
             if (esMultijugador && rivalNombre) {
                 detalleTexto += ` | Rival (${rivalNombre}): ${rivalAciertos}/${TOTAL_JUEGO}`;
             }
@@ -446,8 +454,6 @@
         }
 
         function ejecutarInicioJuego() {
-            bancoPreguntasActual = obtenerBancoSeleccionado(bankSelect.value);
-
             document.getElementById('start-screen').classList.add('hidden');
             document.getElementById('game-container').classList.remove('hidden');
             document.getElementById('player-display').textContent = nombreJugador;
@@ -462,9 +468,9 @@
             
             let seleccionadas = [];
             if (esMultijugador) {
-                seleccionadas = indicesElegidos.map(i => bancoPreguntasActual[i]);
+                seleccionadas = indicesElegidos.map(i => activeCardData[i]);
             } else {
-                seleccionadas = [...bancoPreguntasActual].sort(() => 0.5 - Math.random()).slice(0, TOTAL_JUEGO);
+                seleccionadas = [...activeCardData].sort(() => 0.5 - Math.random()).slice(0, TOTAL_JUEGO);
             }
             
             seleccionadas.forEach((q, idx) => {
@@ -489,23 +495,27 @@
             }
         }
 
-        startBtn.onclick = () => {
+        startBtn.onclick = async () => {
+            const selectedBank = bankSelect.value;
+            
+            if (!esMultijugador || esHost) {
+                await cargarBancoPreguntas(selectedBank);
+            }
+
             if (esMultijugador && esHost) {
-                bancoPreguntasActual = obtenerBancoSeleccionado(bankSelect.value);
-                const todosLosIndices = Array.from({length: bancoPreguntasActual.length}, (_, i) => i);
+                const todosLosIndices = Array.from({length: activeCardData.length}, (_, i) => i);
                 indicesElegidos = todosLosIndices.sort(() => 0.5 - Math.random()).slice(0, TOTAL_JUEGO);
                 
                 conn.send({
                     type: 'START_GAME',
                     indices: indicesElegidos,
                     nombre: nombreJugador,
-                    bancoNum: bankSelect.value
+                    bankFile: selectedBank
                 });
             }
             ejecutarInicioJuego();
         };
 
-        // Exportación PDF del Certificado
         document.getElementById('download-cert-btn').onclick = () => {
             const element = document.getElementById('certificado-node');
             const opt = {
